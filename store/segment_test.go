@@ -29,10 +29,10 @@ func TestSegment(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("when I append a new block to segment", func(t *testing.T) {
-			bw, err := seg.AppendBlock(store.TypeCommit, 0, 0)
+			addr, _, err := seg.AppendBlock(255)
 			require.NoError(t, err)
 			t.Run("then the address of the first block should be 1", func(t *testing.T) {
-				require.Equal(t, store.Address(1), bw.Address)
+				require.Equal(t, store.Address(1), addr)
 			})
 		})
 	})

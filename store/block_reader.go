@@ -69,8 +69,8 @@ func (s BlockReader) GetUsedDataSize() uint64 {
 	return binary.BigEndian.Uint64(s[2:])
 }
 
-func (s BlockReader) GetLowestDescendentAddress() uint64 {
-	return binary.BigEndian.Uint64(s[2+8:])
+func (s BlockReader) GetLowestDescendentAddress() Address {
+	return Address(binary.BigEndian.Uint64(s[2+8:]))
 }
 
 func (s BlockReader) Type() BlockType {

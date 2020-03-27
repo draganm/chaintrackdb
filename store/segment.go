@@ -70,8 +70,36 @@ type Segment struct {
 
 // }
 
-func (s *Segment) StartAddress() uint64 {
-	return binary.BigEndian.Uint64(s.MMap)
+func (s *Segment) StartAddress() Address {
+	return Address(binary.BigEndian.Uint64(s.MMap))
+}
+
+func (s *Segment) endAddress() Address {
+	return s.StartAddress() + Address(binary.BigEndian.Uint64(s.MMap[8:])) - 16
+}
+
+func (s *Segment) hasBlock(a Address) bool {
+	if s.StartAddress() > a {
+		return false
+	}
+
+	if s.endAddress() < a {
+		return false
+	}
+
+	return true
+}
+
+var ErrBlockNotFound = errors.New("block not found")
+
+func (s *Segment) getBlock(a Address) (BlockReader, error) {
+	if !s.hasBlock(a) {
+		return nil, ErrBlockNotFound
+	}
+
+	idx := uint64(a - s.StartAddress() + 16)
+
+	return NewBlockReader(s.MMap[idx:])
 }
 
 func CreateSegment(fileName string, maxSize, offset uint64) (*Segment, error) {
@@ -131,60 +159,20 @@ func (s *Segment) Close() error {
 
 }
 
-func (s *Segment) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
-
-	// block length: 2 bytes
-	// data size: 8 bytes
-	// lowest descendent address: 8 bytes
-	// type: byte
-	// number_of_children: 1 byte
-	// number_of_children * 8 bytes
-
-	if numberOfChildren > 255 {
-		return BlockWriter{}, errors.New("block can't have more than 255 children")
-	}
-
-	blockSize := uint64(2 + 8 + 8 + 1 + 1 + numberOfChildren*8 + dataSize)
-
-	if blockSize > 0xffff {
-		return BlockWriter{}, errors.New("block is too large")
-	}
-
+func (s *Segment) AppendBlock(blockSize uint64) (Address, []byte, error) {
 	err := s.ensureSpace(blockSize)
 	if err != nil {
-		return BlockWriter{}, err
+		return NilAddress, nil, err
 	}
 
-	addr := s.nextBlockOffset() + s.StartAddress() - 16
+	addr := s.nextBlockOffset() + uint64(s.StartAddress()) - 16
 
 	blockData := s.MMap[s.nextBlockOffset() : s.nextBlockOffset()+blockSize]
-
-	d := blockData
 
 	// write end of new block
 	binary.BigEndian.PutUint64(s.MMap[8:], s.nextBlockOffset()+blockSize)
 
-	binary.BigEndian.PutUint64(blockData, uint64(blockSize))
-	blockData = blockData[2:]
-
-	binary.BigEndian.PutUint64(blockData, blockSize)
-	blockData = blockData[8:]
-
-	binary.BigEndian.PutUint64(blockData, addr)
-	blockData = blockData[8:]
-
-	blockData[0] = byte(blockType)
-	blockData = blockData[1:]
-
-	blockData[0] = byte(numberOfChildren)
-	blockData = blockData[1+8*numberOfChildren:]
-
-	return BlockWriter{
-		BlockReader: BlockReader(d),
-		Data:        blockData,
-		Address:     Address(addr),
-	}, nil
-
+	return Address(addr), blockData, nil
 }
 
 const minGrowSize = 16 * 1024 * 1024

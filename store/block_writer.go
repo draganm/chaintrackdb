@@ -1,41 +1,81 @@
 package store
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+
+	"github.com/pkg/errors"
+)
 
 type BlockWriter struct {
-	seg Segment
+	st *Store
 	BlockReader
 	Data []byte
 	Address
 }
 
-func (s BlockWriter) SetChild(i int, addr Address) {
+func (w BlockWriter) SetChild(i int, addr Address) error {
 
-	if i >= s.NumberOfChildren() {
-		panic("trying to set child that segment does not have")
+	if i >= w.NumberOfChildren() {
+		return errors.New("trying to set child that segment does not have")
 	}
 
-	oldChildAddress := s.SegmentReader.GetChildAddress(i)
+	oldChildAddress := w.BlockReader.GetChildAddress(i)
 
 	if oldChildAddress != NilAddress {
-		for i := 0; i < 4; i++ {
-			oldChildReader := s.st.GetSegment(oldChildAddress)
-			newSize := s.GetLayerTotalSize(i) - oldChildReader.GetLayerTotalSize(i)
-			s.SetLayerTotalSize(i, newSize)
+		oldChildReader, err := w.st.getBlockReader(oldChildAddress)
+		if err != nil {
+			return errors.Wrap(err, "while getting child block reader")
+		}
+
+		err = w.subtractUsedData(oldChildReader.GetUsedDataSize())
+		if err != nil {
+			return err
 		}
 	}
 
-	binary.BigEndian.PutUint64(s.SegmentReader[4+1+4*8+1+i*8:], uint64(addr))
+	binary.BigEndian.PutUint64(w.BlockReader[2+8+8+1+1+i*8:], uint64(addr))
 
 	if addr == NilAddress {
-		return
+		return nil
 	}
 
-	newChildReader := NewSegmentReader(s.st.GetSegment(addr))
-
-	for i := 0; i < 4; i++ {
-		newSize := s.GetLayerTotalSize(i) + newChildReader.GetLayerTotalSize(i)
-		s.SetLayerTotalSize(i, newSize)
+	newChildReader, err := w.st.getBlockReader(addr)
+	if err != nil {
+		return errors.Wrap(err, "while getting child block reader")
 	}
 
+	w.addUsedData(newChildReader.GetUsedDataSize())
+
+	lowest := w.Address
+
+	for i := 0; i < w.NumberOfChildren(); i++ {
+		newChildReader, err = w.st.getBlockReader(w.GetChildAddress(i))
+		if err != nil {
+			return errors.Wrap(err, "while getting child block reader")
+		}
+
+		lcd := newChildReader.GetLowestDescendentAddress()
+		if lowest > lcd {
+			lowest = lcd
+		}
+	}
+
+	binary.BigEndian.PutUint64(w.BlockReader[2+8+8:], uint64(lowest))
+
+	return nil
+
+}
+
+func (w BlockWriter) subtractUsedData(bytes uint64) error {
+	used := w.GetUsedDataSize()
+	if bytes > used {
+		return errors.New("subtracting more data than used")
+	}
+	binary.BigEndian.PutUint64(w.BlockReader[2:], used-bytes)
+	return nil
+}
+
+func (w BlockWriter) addUsedData(bytes uint64) {
+	used := w.GetUsedDataSize()
+	binary.BigEndian.PutUint64(w.BlockReader[2:], used+bytes)
 }
