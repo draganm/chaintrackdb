@@ -144,6 +144,45 @@ func CreateSegment(fileName string, maxSize, offset uint64) (*Segment, error) {
 
 }
 
+func OpenSegment(fileName string, maxSize uint64) (*Segment, error) {
+
+	f, err := os.OpenFile(fileName, os.O_RDWR, 0600)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while opening file %q", fileName)
+	}
+
+	fs, err := f.Stat()
+	if err != nil {
+		return nil, errors.Wrapf(err, "while getting fstat of %q", fileName)
+	}
+
+	if fs.Size() < 16 {
+		return nil, errors.Errorf("file %s is shorter than 16 bytes", fileName)
+	}
+
+	mm, err := mmap.MapRegion(f, int(maxSize), mmap.RDWR, 0, 0)
+	if err != nil {
+		f.Close()
+		return nil, errors.Wrapf(err, "while mmaping file %q", fileName)
+	}
+
+	err = unix.Madvise(mm, unix.MADV_RANDOM)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while setting madvise to random for segment file %q", fileName)
+	}
+
+	// TODO: check the last offset
+
+	s := &Segment{
+		f:           f,
+		MMap:        mm,
+		currentSize: uint64(fs.Size()),
+	}
+
+	return s, nil
+
+}
+
 func (s *Segment) Close() error {
 	err := s.MMap.Unmap()
 	if err != nil {

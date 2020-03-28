@@ -2,13 +2,66 @@ package store
 
 import (
 	"encoding/binary"
-	"errors"
+	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"regexp"
+	"sort"
 	"sync"
+
+	"github.com/pkg/errors"
 )
 
 type Store struct {
-	segments []*Segment
-	mu       sync.Mutex
+	segments          []*Segment
+	mu                sync.Mutex
+	lastCommitAddress Address
+}
+
+var storeRegexp = regexp.MustCompile("^segment-[0-9]*.dat$")
+
+const MaxSegmentSize = 1024 * 1024 * 1024 * 1024
+
+func Open(dir string) (*Store, error) {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading dir %s", dir)
+	}
+
+	segmentFiles := []string{}
+
+	for _, f := range files {
+		if f.Mode().IsRegular() && storeRegexp.MatchString(f.Name()) {
+			segmentFiles = append(segmentFiles, filepath.Join(dir, f.Name()))
+		}
+	}
+
+	sort.Strings(segmentFiles)
+
+	st := &Store{}
+
+	for _, sf := range segmentFiles {
+		s, err := OpenSegment(sf, MaxSegmentSize)
+		if err != nil {
+			return nil, err
+		}
+		st.segments = append(st.segments, s)
+	}
+
+	if len(st.segments) == 0 {
+		s, err := CreateSegment(filepath.Join(dir, segmentName(1)), MaxSegmentSize, 1)
+		if err != nil {
+			return nil, err
+		}
+		st.segments = []*Segment{s}
+	}
+
+	return st, nil
+
+}
+
+func segmentName(startAddress uint64) string {
+	return fmt.Sprintf("segment-%016d", startAddress)
 }
 
 func (s *Store) getBlockReader(a Address) (BlockReader, error) {
