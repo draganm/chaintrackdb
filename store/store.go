@@ -15,7 +15,7 @@ import (
 type Store struct {
 	segments          []*Segment
 	mu                sync.Mutex
-	lastCommitAddress Address
+	lastCommitAddress *commitAddress
 }
 
 var storeRegexp = regexp.MustCompile("^segment-[0-9]*.dat$")
@@ -55,6 +55,13 @@ func Open(dir string) (*Store, error) {
 		}
 		st.segments = []*Segment{s}
 	}
+
+	ca, err := openCommitAddress(filepath.Join(dir, "commitAddress"))
+	if err != nil {
+		return nil, err
+	}
+
+	st.lastCommitAddress = ca
 
 	return st, nil
 
