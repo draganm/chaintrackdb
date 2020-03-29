@@ -134,7 +134,7 @@ func openSegment(fileName string, maxSize uint64) (*segment, error) {
 
 }
 
-func (s *segment) Close() error {
+func (s *segment) close() error {
 	err := s.MMap.Unmap()
 	if err != nil {
 		return errors.Wrapf(err, "while unmmaping %q", s.f.Name())
@@ -149,7 +149,7 @@ func (s *segment) Close() error {
 
 }
 
-func (s *segment) AppendBlock(blockSize uint64) (Address, []byte, error) {
+func (s *segment) appendBlock(blockSize uint64) (Address, []byte, error) {
 	err := s.ensureSpace(blockSize)
 	if err != nil {
 		return NilAddress, nil, err

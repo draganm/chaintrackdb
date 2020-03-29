@@ -103,7 +103,7 @@ func (s *Store) AppendBlock(blockType BlockType, numberOfChildren int, dataSize 
 	}
 
 	lastSegment := s.segments[len(s.segments)-1]
-	addr, blockData, err := lastSegment.AppendBlock(blockSize)
+	addr, blockData, err := lastSegment.appendBlock(blockSize)
 	if err != nil {
 		return BlockWriter{}, err
 	}
@@ -131,4 +131,21 @@ func (s *Store) AppendBlock(blockType BlockType, numberOfChildren int, dataSize 
 		Address:     addr,
 	}, nil
 
+}
+
+func (s *Store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.lastCommitAddress.close()
+	if err != nil {
+		return errors.Wrap(err, "while cosing last commit address")
+	}
+
+	for _, seg := range s.segments {
+		err = seg.close()
+		if err != nil {
+			return errors.Wrap(err, "while closing a segment")
+		}
+	}
+	return nil
 }

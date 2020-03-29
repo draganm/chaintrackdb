@@ -56,3 +56,18 @@ func openCommitAddress(fileName string) (*commitAddress, error) {
 	return s, nil
 
 }
+
+func (c *commitAddress) close() error {
+	err := c.MMap.Unmap()
+	if err != nil {
+		return errors.Wrapf(err, "while unmmaping %q", c.f.Name())
+	}
+
+	err = c.f.Close()
+	if err != nil {
+		return errors.Wrapf(err, "while closing %s", c.f.Name())
+	}
+
+	return nil
+
+}
