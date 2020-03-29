@@ -134,6 +134,18 @@ func openSegment(fileName string, maxSize uint64) (*segment, error) {
 
 }
 
+func (s *segment) closeAndRemove() error {
+	err := s.close()
+	if err != nil {
+		return errors.Wrap(err, "while closing segment")
+	}
+	err = os.Remove(s.f.Name())
+	if err != nil {
+		return errors.Wrapf(err, "while removing %q", s.f.Name())
+	}
+	return nil
+}
+
 func (s *segment) close() error {
 	err := s.MMap.Unmap()
 	if err != nil {

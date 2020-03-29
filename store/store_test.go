@@ -32,6 +32,8 @@ func TestCreatingNewStore(t *testing.T) {
 			tx, err := st.NewWriteTransaction(context.Background())
 			require.NoError(t, err)
 
+			defer tx.Rollback()
+
 			bw, err := tx.AppendBlock(store.TypeBTreeNode, 0, 20)
 			require.NoError(t, err)
 

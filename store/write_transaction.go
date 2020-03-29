@@ -1,16 +1,24 @@
 package store
 
 import (
+	"context"
 	"encoding/binary"
-	"errors"
+
+	"github.com/pkg/errors"
 )
 
 type WriteTransaction struct {
 	s         *Store
 	txSegment *segment
+	ctx       context.Context
 }
 
 func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
+	err := w.ctx.Err()
+	if err != nil {
+		return BlockWriter{}, err
+	}
+
 	if numberOfChildren > 255 {
 		return BlockWriter{}, errors.New("block can't have more than 255 children")
 	}
@@ -53,8 +61,22 @@ func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int
 }
 
 func (w *WriteTransaction) GetBlock(a Address) (BlockReader, error) {
+	err := w.ctx.Err()
+	if err != nil {
+		return nil, err
+	}
+
 	if w.txSegment.hasBlock(a) {
 		return w.txSegment.getBlock(a)
 	}
 	return w.s.getBlockReader(a)
+}
+
+func (w *WriteTransaction) Rollback() error {
+	w.s.txRolledBack()
+	err := w.txSegment.closeAndRemove()
+	if err != nil {
+		return errors.Wrap(err, "while closing and removing tx segment")
+	}
+	return nil
 }
