@@ -9,76 +9,27 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Segment layout
+// segment layout
 
 // start addres - 8 bytes
 // next block oofset - 8 bytes
 // data - rest
 
-type Segment struct {
+type segment struct {
 	f           *os.File
 	MMap        mmap.MMap
 	currentSize uint64
 }
 
-// func OpenSegment(fileName string, maxSize uint) (*Segment, error) {
-// 	f, err := os.OpenFile(fileName, os.O_RDWR, 0600)
-// 	if err != nil {
-// 		return nil, errors.Wrapf(err, "while opening file %q", fileName)
-// 	}
-
-// 	fs, err := f.Stat()
-// 	if err != nil {
-// 		return nil, errors.Wrapf(err, "while getting stats of file %q", fileName)
-// 	}
-
-// 	if fs.Size() <= 16 {
-// 		return nil, errors.New("segment file %q does not have more than 16 bytes")
-// 	}
-
-// 	mm, err := mmap.MapRegion(f, int(maxSize), mmap.RDWR, 0, 0)
-// 	if err != nil {
-// 		f.Close()
-// 		return nil, errors.Wrapf(err, "while mmaping file %q", fileName)
-// 	}
-
-// 	err = unix.Madvise(mm, unix.MADV_RANDOM)
-// 	if err != nil {
-// 		return nil, errors.Wrapf(err, "while setting madvise to random for segment file %q", fileName)
-// 	}
-
-// 	s := &Segment{
-// 		f:           f,
-// 		MMap:        mm,
-// 		currentSize: uint64(fs.Size()),
-// 	}
-
-// 	if s.LastBlockAddress()-s.StartAddress() >= s.currentSize {
-// 		return nil, errors.New("last block offset is past end of segment")
-// 	}
-
-// 	br, err := NewBlockReader(s.MMap[int(s.LastBlockAddress()-s.StartAddress()):])
-// 	if err != nil {
-// 		return nil, errors.Wrap(err, "while reading last block")
-// 	}
-
-// 	if br.BlockSize()+s.LastBlockAddress()-s.StartAddress() >= s.currentSize {
-// 		return nil, errors.New("end of last block is past end of segment")
-// 	}
-
-// 	return s, nil
-
-// }
-
-func (s *Segment) StartAddress() Address {
+func (s *segment) StartAddress() Address {
 	return Address(binary.BigEndian.Uint64(s.MMap))
 }
 
-func (s *Segment) endAddress() Address {
+func (s *segment) endAddress() Address {
 	return s.StartAddress() + Address(binary.BigEndian.Uint64(s.MMap[8:])) - 16
 }
 
-func (s *Segment) hasBlock(a Address) bool {
+func (s *segment) hasBlock(a Address) bool {
 	if s.StartAddress() > a {
 		return false
 	}
@@ -92,7 +43,7 @@ func (s *Segment) hasBlock(a Address) bool {
 
 var ErrBlockNotFound = errors.New("block not found")
 
-func (s *Segment) getBlock(a Address) (BlockReader, error) {
+func (s *segment) getBlock(a Address) (BlockReader, error) {
 	if !s.hasBlock(a) {
 		return nil, ErrBlockNotFound
 	}
@@ -102,7 +53,7 @@ func (s *Segment) getBlock(a Address) (BlockReader, error) {
 	return NewBlockReader(s.MMap[idx:])
 }
 
-func CreateSegment(fileName string, maxSize, offset uint64) (*Segment, error) {
+func createSegment(fileName string, maxSize, offset uint64) (*segment, error) {
 
 	if offset == 0 {
 		return nil, errors.New("offset must be > 0")
@@ -134,7 +85,7 @@ func CreateSegment(fileName string, maxSize, offset uint64) (*Segment, error) {
 		return nil, errors.Wrapf(err, "while setting madvise to random for segment file %q", fileName)
 	}
 
-	s := &Segment{
+	s := &segment{
 		f:           f,
 		MMap:        mm,
 		currentSize: uint64(len(addressAndNextBlockOffset)),
@@ -144,7 +95,7 @@ func CreateSegment(fileName string, maxSize, offset uint64) (*Segment, error) {
 
 }
 
-func OpenSegment(fileName string, maxSize uint64) (*Segment, error) {
+func openSegment(fileName string, maxSize uint64) (*segment, error) {
 
 	f, err := os.OpenFile(fileName, os.O_RDWR, 0600)
 	if err != nil {
@@ -173,7 +124,7 @@ func OpenSegment(fileName string, maxSize uint64) (*Segment, error) {
 
 	// TODO: check the last offset
 
-	s := &Segment{
+	s := &segment{
 		f:           f,
 		MMap:        mm,
 		currentSize: uint64(fs.Size()),
@@ -183,7 +134,7 @@ func OpenSegment(fileName string, maxSize uint64) (*Segment, error) {
 
 }
 
-func (s *Segment) Close() error {
+func (s *segment) Close() error {
 	err := s.MMap.Unmap()
 	if err != nil {
 		return errors.Wrapf(err, "while unmmaping %q", s.f.Name())
@@ -198,7 +149,7 @@ func (s *Segment) Close() error {
 
 }
 
-func (s *Segment) AppendBlock(blockSize uint64) (Address, []byte, error) {
+func (s *segment) AppendBlock(blockSize uint64) (Address, []byte, error) {
 	err := s.ensureSpace(blockSize)
 	if err != nil {
 		return NilAddress, nil, err
@@ -216,7 +167,7 @@ func (s *Segment) AppendBlock(blockSize uint64) (Address, []byte, error) {
 
 const minGrowSize = 16 * 1024 * 1024
 
-func (s *Segment) ensureSpace(len uint64) error {
+func (s *segment) ensureSpace(len uint64) error {
 
 	if s.currentSize-s.nextBlockOffset() >= len {
 		return nil
@@ -241,6 +192,6 @@ func (s *Segment) ensureSpace(len uint64) error {
 
 }
 
-func (s *Segment) nextBlockOffset() uint64 {
+func (s *segment) nextBlockOffset() uint64 {
 	return binary.BigEndian.Uint64(s.MMap[8:])
 }

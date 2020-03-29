@@ -1,11 +1,22 @@
 package store_test
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/draganm/chaintrackdb/store"
 	"github.com/stretchr/testify/require"
 )
+
+func NewTempDir(t *testing.T) (string, func()) {
+	td, err := ioutil.TempDir("", "")
+	require.NoError(t, err)
+
+	return td, func() {
+		os.RemoveAll(td)
+	}
+}
 
 func TestCreatingNewStore(t *testing.T) {
 

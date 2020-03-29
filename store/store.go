@@ -13,7 +13,7 @@ import (
 )
 
 type Store struct {
-	segments          []*Segment
+	segments          []*segment
 	mu                sync.Mutex
 	lastCommitAddress *commitAddress
 }
@@ -41,7 +41,7 @@ func Open(dir string) (*Store, error) {
 	st := &Store{}
 
 	for _, sf := range segmentFiles {
-		s, err := OpenSegment(sf, MaxSegmentSize)
+		s, err := openSegment(sf, MaxSegmentSize)
 		if err != nil {
 			return nil, err
 		}
@@ -49,11 +49,11 @@ func Open(dir string) (*Store, error) {
 	}
 
 	if len(st.segments) == 0 {
-		s, err := CreateSegment(filepath.Join(dir, segmentName(1)), MaxSegmentSize, 1)
+		s, err := createSegment(filepath.Join(dir, segmentName(1)), MaxSegmentSize, 1)
 		if err != nil {
 			return nil, err
 		}
-		st.segments = []*Segment{s}
+		st.segments = []*segment{s}
 	}
 
 	ca, err := openCommitAddress(filepath.Join(dir, "commitAddress"))
