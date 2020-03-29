@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -28,8 +29,12 @@ func TestCreatingNewStore(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("when I append a new block to the store", func(t *testing.T) {
-			bw, err := st.AppendBlock(store.TypeBTreeNode, 0, 20)
+			tx, err := st.NewWriteTransaction(context.Background())
 			require.NoError(t, err)
+
+			bw, err := tx.AppendBlock(store.TypeBTreeNode, 0, 20)
+			require.NoError(t, err)
+
 			t.Run("it should return a block writer", func(t *testing.T) {
 				require.Equal(t, 20, len(bw.Data))
 			})
@@ -56,7 +61,12 @@ func TestOpeningExistingStore(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Run("when I append a new block to the store", func(t *testing.T) {
-				bw, err := st.AppendBlock(store.TypeBTreeNode, 0, 20)
+				tx, err := st.NewWriteTransaction(context.Background())
+				require.NoError(t, err)
+
+				bw, err := tx.AppendBlock(store.TypeBTreeNode, 0, 20)
+				require.NoError(t, err)
+
 				require.NoError(t, err)
 				t.Run("it should return a block writer", func(t *testing.T) {
 					require.Equal(t, 20, len(bw.Data))

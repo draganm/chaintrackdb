@@ -53,7 +53,7 @@ func (s *segment) getBlock(a Address) (BlockReader, error) {
 	return NewBlockReader(s.MMap[idx:])
 }
 
-func createSegment(fileName string, maxSize, offset uint64) (*segment, error) {
+func createSegment(fileName string, maxSize uint64, offset Address) (*segment, error) {
 
 	if offset == 0 {
 		return nil, errors.New("offset must be > 0")
@@ -66,7 +66,7 @@ func createSegment(fileName string, maxSize, offset uint64) (*segment, error) {
 
 	addressAndNextBlockOffset := make([]byte, 16)
 
-	binary.BigEndian.PutUint64(addressAndNextBlockOffset, offset)
+	binary.BigEndian.PutUint64(addressAndNextBlockOffset, uint64(offset))
 	binary.BigEndian.PutUint64(addressAndNextBlockOffset[8:], 16)
 
 	_, err = f.Write(addressAndNextBlockOffset)

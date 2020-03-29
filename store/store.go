@@ -1,7 +1,7 @@
 package store
 
 import (
-	"encoding/binary"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -13,9 +13,13 @@ import (
 )
 
 type Store struct {
-	segments          []*segment
-	mu                sync.Mutex
-	lastCommitAddress *commitAddress
+	dir                        string
+	segments                   []*segment
+	mu                         *sync.Mutex
+	lastCommitAddress          *commitAddress
+	readerTransactions         int
+	writeTransactionInProgress bool
+	writeTransactionCond       *sync.Cond
 }
 
 var storeRegexp = regexp.MustCompile("^segment-[0-9]*.dat$")
@@ -37,8 +41,13 @@ func Open(dir string) (*Store, error) {
 	}
 
 	sort.Strings(segmentFiles)
-
-	st := &Store{}
+	l := new(sync.Mutex)
+	wtc := sync.NewCond(l)
+	st := &Store{
+		dir:                  dir,
+		mu:                   l,
+		writeTransactionCond: wtc,
+	}
 
 	for _, sf := range segmentFiles {
 		s, err := openSegment(sf, MaxSegmentSize)
@@ -87,51 +96,51 @@ func (s *Store) getBlockReader(a Address) (BlockReader, error) {
 	return nil, ErrBlockNotFound
 }
 
-func (s *Store) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
+// func (s *Store) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// 	s.mu.Lock()
+// 	defer s.mu.Unlock()
 
-	if numberOfChildren > 255 {
-		return BlockWriter{}, errors.New("block can't have more than 255 children")
-	}
+// 	if numberOfChildren > 255 {
+// 		return BlockWriter{}, errors.New("block can't have more than 255 children")
+// 	}
 
-	blockSize := uint64(2 + 8 + 8 + 1 + 1 + numberOfChildren*8 + dataSize)
+// 	blockSize := uint64(2 + 8 + 8 + 1 + 1 + numberOfChildren*8 + dataSize)
 
-	if blockSize > 0xffff {
-		return BlockWriter{}, errors.New("block is too large")
-	}
+// 	if blockSize > 0xffff {
+// 		return BlockWriter{}, errors.New("block is too large")
+// 	}
 
-	lastSegment := s.segments[len(s.segments)-1]
-	addr, blockData, err := lastSegment.appendBlock(blockSize)
-	if err != nil {
-		return BlockWriter{}, err
-	}
+// 	lastSegment := s.segments[len(s.segments)-1]
+// 	addr, blockData, err := lastSegment.appendBlock(blockSize)
+// 	if err != nil {
+// 		return BlockWriter{}, err
+// 	}
 
-	d := blockData
+// 	d := blockData
 
-	binary.BigEndian.PutUint64(blockData, uint64(blockSize))
-	blockData = blockData[2:]
+// 	binary.BigEndian.PutUint64(blockData, uint64(blockSize))
+// 	blockData = blockData[2:]
 
-	binary.BigEndian.PutUint64(blockData, blockSize)
-	blockData = blockData[8:]
+// 	binary.BigEndian.PutUint64(blockData, blockSize)
+// 	blockData = blockData[8:]
 
-	binary.BigEndian.PutUint64(blockData, uint64(addr))
-	blockData = blockData[8:]
+// 	binary.BigEndian.PutUint64(blockData, uint64(addr))
+// 	blockData = blockData[8:]
 
-	blockData[0] = byte(blockType)
-	blockData = blockData[1:]
+// 	blockData[0] = byte(blockType)
+// 	blockData = blockData[1:]
 
-	blockData[0] = byte(numberOfChildren)
-	blockData = blockData[1+8*numberOfChildren:]
+// 	blockData[0] = byte(numberOfChildren)
+// 	blockData = blockData[1+8*numberOfChildren:]
 
-	return BlockWriter{
-		BlockReader: BlockReader(d),
-		Data:        blockData,
-		Address:     addr,
-	}, nil
+// 	return BlockWriter{
+// 		BlockReader: BlockReader(d),
+// 		Data:        blockData,
+// 		Address:     addr,
+// 	}, nil
 
-}
+// }
 
 func (s *Store) Close() error {
 	s.mu.Lock()
@@ -148,4 +157,52 @@ func (s *Store) Close() error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) NewReadTransaction() *ReadTransaction {
+	return &ReadTransaction{s}
+}
+
+func (s *Store) nextAddress() Address {
+	ls := s.segments[len(s.segments)-1]
+	return ls.endAddress()
+}
+
+func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, error) {
+	go func() {
+		dc := ctx.Done()
+		if dc != nil {
+			select {
+			case <-dc:
+				s.mu.Lock()
+				s.writeTransactionCond.Broadcast()
+				s.mu.Unlock()
+			}
+		}
+	}()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if !s.writeTransactionInProgress {
+			break
+		}
+		s.writeTransactionCond.Wait()
+	}
+
+	s.writeTransactionInProgress = true
+
+	txSegment, err := createSegment(filepath.Join(s.dir, "tx"), MaxSegmentSize, s.nextAddress())
+
+	if err != nil {
+		return nil, errors.Wrap(err, "while creating tx segment")
+	}
+
+	return &WriteTransaction{
+		s:         s,
+		txSegment: txSegment,
+	}, nil
+
 }
