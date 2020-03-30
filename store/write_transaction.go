@@ -7,13 +7,20 @@ import (
 	"github.com/pkg/errors"
 )
 
-type WriteTransaction struct {
+type WriteTransaction interface {
+	ReadTransaction
+	AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error)
+	Rollback() error
+	Commit(Address) (Address, error)
+}
+
+type wtx struct {
 	s         *Store
 	txSegment *segment
 	ctx       context.Context
 }
 
-func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
+func (w *wtx) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
 	err := w.ctx.Err()
 	if err != nil {
 		return BlockWriter{}, err
@@ -37,7 +44,7 @@ func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int
 
 	d := blockData
 
-	binary.BigEndian.PutUint64(blockData, uint64(blockSize))
+	binary.BigEndian.PutUint16(blockData, uint16(blockSize))
 	blockData = blockData[2:]
 
 	binary.BigEndian.PutUint64(blockData, blockSize)
@@ -53,6 +60,7 @@ func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int
 	blockData = blockData[1+8*numberOfChildren:]
 
 	return BlockWriter{
+		st:          w.s,
 		BlockReader: BlockReader(d),
 		Data:        blockData,
 		Address:     addr,
@@ -60,7 +68,7 @@ func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int
 
 }
 
-func (w *WriteTransaction) GetBlock(a Address) (BlockReader, error) {
+func (w *wtx) GetBlock(a Address) (BlockReader, error) {
 	err := w.ctx.Err()
 	if err != nil {
 		return nil, err
@@ -72,11 +80,15 @@ func (w *WriteTransaction) GetBlock(a Address) (BlockReader, error) {
 	return w.s.getBlockReader(a)
 }
 
-func (w *WriteTransaction) Rollback() error {
+func (w *wtx) Rollback() error {
 	w.s.txRolledBack()
 	err := w.txSegment.closeAndRemove()
 	if err != nil {
 		return errors.Wrap(err, "while closing and removing tx segment")
 	}
 	return nil
+}
+
+func (w *wtx) Commit(a Address) (Address, error) {
+	return NilAddress, errors.New("Commit is not yet supported")
 }

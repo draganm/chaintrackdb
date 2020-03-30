@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/binary"
 	"os"
 
 	"github.com/edsrzf/mmap-go"
@@ -70,4 +71,12 @@ func (c *commitAddress) close() error {
 
 	return nil
 
+}
+
+func (c *commitAddress) address() Address {
+	return Address(binary.BigEndian.Uint64(c.MMap))
+}
+
+func (c *commitAddress) setAddress(a Address) {
+	binary.BigEndian.PutUint64(c.MMap, uint64(a))
 }

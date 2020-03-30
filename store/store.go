@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -70,6 +71,26 @@ func Open(dir string) (*Store, error) {
 		return nil, err
 	}
 
+	if ca.address() == NilAddress {
+
+		// create empty btree root
+		lastSeg := st.segments[len(st.segments)-1]
+
+		blockSize := uint64(2 + 8 + 8 + 1 + 1 + 8)
+
+		rootAddress, data, err := lastSeg.appendBlock(blockSize)
+		if err != nil {
+			return nil, errors.Wrap(err, "while appending inital commit block")
+		}
+		binary.BigEndian.PutUint16(data, uint16(blockSize))
+		binary.BigEndian.PutUint64(data[2:], blockSize)
+		binary.BigEndian.PutUint64(data[10:], uint64(rootAddress))
+		data[18] = byte(TypeBTreeNode)
+
+		ca.setAddress(rootAddress)
+
+	}
+
 	st.lastCommitAddress = ca
 
 	return st, nil
@@ -113,8 +134,8 @@ func (s *Store) Close() error {
 	return nil
 }
 
-func (s *Store) NewReadTransaction() *ReadTransaction {
-	return &ReadTransaction{s}
+func (s *Store) NewReadTransaction() ReadTransaction {
+	return &rtx{s}
 }
 
 func (s *Store) nextAddress() Address {
@@ -129,7 +150,7 @@ func (s *Store) txRolledBack() {
 	s.mu.Unlock()
 }
 
-func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, error) {
+func (s *Store) NewWriteTransaction(ctx context.Context) (WriteTransaction, error) {
 	go func() {
 		dc := ctx.Done()
 		if dc != nil {
@@ -161,7 +182,7 @@ func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, err
 		return nil, errors.Wrap(err, "while creating tx segment")
 	}
 
-	return &WriteTransaction{
+	return &wtx{
 		s:         s,
 		txSegment: txSegment,
 		ctx:       ctx,

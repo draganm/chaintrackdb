@@ -25,7 +25,7 @@ func NewBlockReader(data []byte) (BlockReader, error) {
 	totalLength := int(binary.BigEndian.Uint16(data))
 
 	if len(data) < totalLength {
-		panic(errors.New("block data is too short"))
+		return nil, errors.New("block data is too short")
 	}
 
 	numberOfChildren := data[2+8+8+1]
@@ -33,7 +33,7 @@ func NewBlockReader(data []byte) (BlockReader, error) {
 	headerLength := 2 + 8 + 8 + 1 + 1 + numberOfChildren*8
 
 	if int(headerLength) > totalLength {
-		panic(errors.New("total length is too short"))
+		return nil, errors.New("total length is too short")
 	}
 
 	return data[:totalLength], nil
