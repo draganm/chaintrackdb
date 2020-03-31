@@ -34,11 +34,17 @@ func TestCreatingNewStore(t *testing.T) {
 
 			defer tx.Rollback()
 
-			bw, err := tx.AppendBlock(store.TypeBTreeNode, 0, 20)
+			bw, err := tx.AppendBlock(store.TypeBTreeNode, 0, 8)
 			require.NoError(t, err)
 
 			t.Run("it should return a block writer", func(t *testing.T) {
-				require.Equal(t, 20, len(bw.Data))
+				require.Equal(t, 8, len(bw.Data))
+			})
+
+			t.Run("when I commit the transaction", func(t *testing.T) {
+				newRootAddress, err := tx.Commit(bw.Address)
+				require.NoError(t, err)
+				require.NotEqual(t, store.NilAddress, newRootAddress)
 			})
 		})
 

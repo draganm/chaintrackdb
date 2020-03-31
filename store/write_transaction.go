@@ -92,5 +92,75 @@ func (w *WriteTransaction) Rollback() error {
 }
 
 func (w *WriteTransaction) Commit(a Address) (Address, error) {
-	return NilAddress, errors.New("Commit is not yet supported")
+
+	if a < w.txSegment.StartAddress() {
+		return NilAddress, errors.New("commit address is outside the transaction")
+	}
+
+	return w.copyBlocks(a, w.txSegment.StartAddress())
+}
+
+func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
+
+	if current == NilAddress {
+		return NilAddress, nil
+	}
+
+	if current < start {
+		return current, nil
+	}
+
+	lastSegment := w.s.segments[len(w.s.segments)-1]
+
+	br, err := w.GetBlock(current)
+	if err != nil {
+		return NilAddress, errors.Wrapf(err, "while getting block %d", current)
+	}
+
+	addr, nbd, err := lastSegment.appendBlock(uint64(len(br)))
+	if err != nil {
+		return NilAddress, errors.Wrap(err, "while appending block")
+	}
+
+	copy(nbd, br)
+
+	// set total data to block size
+	binary.BigEndian.PutUint64(nbd[2:], uint64(len(nbd)))
+
+	// set lowest address to block address
+	binary.BigEndian.PutUint64(nbd[2+8:], uint64(addr))
+
+	// zero all children
+	numberOfChildren := int(nbd[2+8+8+1])
+	for i := 0; i < numberOfChildren; i++ {
+		binary.BigEndian.PutUint64(nbd[2+8+8+1+1+8*i:], 0)
+	}
+
+	// uint64(2 + 8 + 8 + 1 + 1 + numberOfChildren*8 + dataSize)
+
+	nbr, err := NewBlockReader(nbd)
+	if err != nil {
+		return NilAddress, errors.Wrap(err, "while creating reader for the copied block")
+	}
+
+	bw := BlockWriter{
+		st:          w.s,
+		Address:     addr,
+		BlockReader: nbr,
+		Data:        nbr.GetData(),
+	}
+
+	for i := 0; i < numberOfChildren; i++ {
+		newAddress, err := w.copyBlocks(br.GetChildAddress(i), start)
+		if err != nil {
+			return NilAddress, err
+		}
+		err = bw.SetChild(i, newAddress)
+		if err != nil {
+			return NilAddress, errors.Wrap(err, "while setting child address of the new block")
+		}
+	}
+
+	return addr, nil
+
 }
