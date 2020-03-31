@@ -9,5 +9,5 @@ type ReadTransaction struct {
 }
 
 func (r *ReadTransaction) GetBlock(a Address) (BlockReader, error) {
-	return r.s.getBlockReader(a)
+	return r.s.GetBlock(a)
 }

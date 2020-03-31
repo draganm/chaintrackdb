@@ -79,7 +79,7 @@ func (w *WriteTransaction) GetBlock(a Address) (BlockReader, error) {
 	if w.txSegment.hasBlock(a) {
 		return w.txSegment.getBlock(a)
 	}
-	return w.s.getBlockReader(a)
+	return w.s.GetBlock(a)
 }
 
 func (w *WriteTransaction) Rollback() error {
