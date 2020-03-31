@@ -62,7 +62,7 @@ func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int
 	blockData = blockData[1+8*numberOfChildren:]
 
 	return BlockWriter{
-		st:          w.s,
+		st:          w,
 		BlockReader: BlockReader(d),
 		Data:        blockData,
 		Address:     addr,
@@ -144,7 +144,7 @@ func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
 	}
 
 	bw := BlockWriter{
-		st:          w.s,
+		st:          w,
 		Address:     addr,
 		BlockReader: nbr,
 		Data:        nbr.GetData(),

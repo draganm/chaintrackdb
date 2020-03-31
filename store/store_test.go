@@ -34,17 +34,40 @@ func TestCreatingNewStore(t *testing.T) {
 
 			defer tx.Rollback()
 
-			bw, err := tx.AppendBlock(store.TypeBTreeNode, 0, 8)
+			bw, err := tx.AppendBlock(store.TypeBTreeNode, 1, 8)
 			require.NoError(t, err)
+			bw.Data[0] = 0x42
 
 			t.Run("it should return a block writer", func(t *testing.T) {
 				require.Equal(t, 8, len(bw.Data))
+			})
+
+			t.Run("when I create a new block and set it as a child", func(t *testing.T) {
+				nbw, err := tx.AppendBlock(store.TypeDataLeaf, 0, 255)
+				require.NoError(t, err)
+				nbw.Data[1] = 0x43
+
+				err = bw.SetChild(0, nbw.Address)
+				require.NoError(t, err)
 			})
 
 			t.Run("when I commit the transaction", func(t *testing.T) {
 				newRootAddress, err := tx.Commit(bw.Address)
 				require.NoError(t, err)
 				require.NotEqual(t, store.NilAddress, newRootAddress)
+
+				t.Run("when I read the new address", func(t *testing.T) {
+					tx := st.NewReadTransaction()
+					br, err := tx.GetBlock(newRootAddress)
+					require.NoError(t, err)
+					require.Equal(t, []byte{0x42, 0, 0, 0, 0, 0, 0, 0}, br.GetData())
+					require.Equal(t, 1, br.NumberOfChildren())
+
+					cr, err := tx.GetBlock(br.GetChildAddress(0))
+					require.NoError(t, err)
+					require.Equal(t, 255, len(cr.GetData()))
+
+				})
 			})
 		})
 

@@ -7,7 +7,7 @@ import (
 )
 
 type BlockWriter struct {
-	st *Store
+	st Reader
 	BlockReader
 	Data []byte
 	Address
@@ -22,7 +22,7 @@ func (w BlockWriter) SetChild(i int, addr Address) error {
 	oldChildAddress := w.BlockReader.GetChildAddress(i)
 
 	if oldChildAddress != NilAddress {
-		oldChildReader, err := w.st.getBlockReader(oldChildAddress)
+		oldChildReader, err := w.st.GetBlock(oldChildAddress)
 		if err != nil {
 			return errors.Wrap(err, "while getting child block reader")
 		}
@@ -39,7 +39,7 @@ func (w BlockWriter) SetChild(i int, addr Address) error {
 		return nil
 	}
 
-	newChildReader, err := w.st.getBlockReader(addr)
+	newChildReader, err := w.st.GetBlock(addr)
 	if err != nil {
 		return errors.Wrap(err, "while getting child block reader")
 	}
@@ -49,7 +49,7 @@ func (w BlockWriter) SetChild(i int, addr Address) error {
 	lowest := w.Address
 
 	for i := 0; i < w.NumberOfChildren(); i++ {
-		newChildReader, err = w.st.getBlockReader(w.GetChildAddress(i))
+		newChildReader, err = w.st.GetBlock(w.GetChildAddress(i))
 		if err != nil {
 			return errors.Wrap(err, "while getting child block reader")
 		}
@@ -60,7 +60,7 @@ func (w BlockWriter) SetChild(i int, addr Address) error {
 		}
 	}
 
-	binary.BigEndian.PutUint64(w.BlockReader[2+8+8:], uint64(lowest))
+	binary.BigEndian.PutUint64(w.BlockReader[2+8:], uint64(lowest))
 
 	return nil
 
