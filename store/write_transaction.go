@@ -7,20 +7,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-type WriteTransaction interface {
-	ReadTransaction
+type Writer interface {
 	AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error)
-	Rollback() error
-	Commit(Address) (Address, error)
 }
 
-type wtx struct {
+type ReaderWriter interface {
+	Reader
+	Writer
+}
+
+type WriteTransaction struct {
 	s         *Store
 	txSegment *segment
 	ctx       context.Context
 }
 
-func (w *wtx) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
+func (w *WriteTransaction) AppendBlock(blockType BlockType, numberOfChildren int, dataSize int) (BlockWriter, error) {
 	err := w.ctx.Err()
 	if err != nil {
 		return BlockWriter{}, err
@@ -68,7 +70,7 @@ func (w *wtx) AppendBlock(blockType BlockType, numberOfChildren int, dataSize in
 
 }
 
-func (w *wtx) GetBlock(a Address) (BlockReader, error) {
+func (w *WriteTransaction) GetBlock(a Address) (BlockReader, error) {
 	err := w.ctx.Err()
 	if err != nil {
 		return nil, err
@@ -80,7 +82,7 @@ func (w *wtx) GetBlock(a Address) (BlockReader, error) {
 	return w.s.getBlockReader(a)
 }
 
-func (w *wtx) Rollback() error {
+func (w *WriteTransaction) Rollback() error {
 	w.s.txRolledBack()
 	err := w.txSegment.closeAndRemove()
 	if err != nil {
@@ -89,6 +91,6 @@ func (w *wtx) Rollback() error {
 	return nil
 }
 
-func (w *wtx) Commit(a Address) (Address, error) {
+func (w *WriteTransaction) Commit(a Address) (Address, error) {
 	return NilAddress, errors.New("Commit is not yet supported")
 }

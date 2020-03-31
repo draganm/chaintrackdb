@@ -9,7 +9,7 @@ import (
 
 type fragmentAggregator struct {
 	maxfragments int
-	store        store.WriteTransaction
+	store        store.ReaderWriter
 	parent       *fragmentAggregator
 	fragments    []store.Address
 	totalSize    uint64
@@ -85,7 +85,7 @@ func (f *fragmentAggregator) finish() (store.Address, error) {
 	return f.parent.finish()
 }
 
-func newFragmentAggregator(maxfragments int, store store.WriteTransaction) *fragmentAggregator {
+func newFragmentAggregator(maxfragments int, store store.ReaderWriter) *fragmentAggregator {
 	return &fragmentAggregator{
 		maxfragments: maxfragments,
 		store:        store,
@@ -102,10 +102,10 @@ type DataWriter struct {
 
 	buffer []byte
 
-	store store.WriteTransaction
+	store store.ReaderWriter
 }
 
-func NewDataWriter(store store.WriteTransaction, fragSize, fanout int) *DataWriter {
+func NewDataWriter(store store.ReaderWriter, fragSize, fanout int) *DataWriter {
 	return &DataWriter{
 		fragSize:         fragSize,
 		fanout:           fanout,

@@ -134,8 +134,8 @@ func (s *Store) Close() error {
 	return nil
 }
 
-func (s *Store) NewReadTransaction() ReadTransaction {
-	return &rtx{s}
+func (s *Store) NewReadTransaction() *ReadTransaction {
+	return &ReadTransaction{s}
 }
 
 func (s *Store) nextAddress() Address {
@@ -150,7 +150,7 @@ func (s *Store) txRolledBack() {
 	s.mu.Unlock()
 }
 
-func (s *Store) NewWriteTransaction(ctx context.Context) (WriteTransaction, error) {
+func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, error) {
 	go func() {
 		dc := ctx.Done()
 		if dc != nil {
@@ -182,7 +182,7 @@ func (s *Store) NewWriteTransaction(ctx context.Context) (WriteTransaction, erro
 		return nil, errors.Wrap(err, "while creating tx segment")
 	}
 
-	return &wtx{
+	return &WriteTransaction{
 		s:         s,
 		txSegment: txSegment,
 		ctx:       ctx,

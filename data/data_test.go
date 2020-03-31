@@ -21,7 +21,7 @@ func createTempDir(t *testing.T) (string, func() error) {
 	}
 }
 
-func newWriteTransaction(t *testing.T) (store.WriteTransaction, func() error) {
+func newWriteTransaction(t *testing.T) (*store.WriteTransaction, func() error) {
 	td, cleanup := createTempDir(t)
 
 	st, err := store.Open(td)
@@ -61,6 +61,7 @@ func TestStore(t *testing.T) {
 
 		sr, err := st.GetBlock(k)
 		require.NoError(t, err)
+
 		require.True(t, sr.NumberOfChildren() == 0, "segment should not have children")
 		require.Equal(t, []byte{1, 2, 3}, sr.GetData())
 

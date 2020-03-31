@@ -8,13 +8,13 @@ import (
 )
 
 type reader struct {
-	store        store.ReadTransaction
+	store        store.Reader
 	path         []int
 	root         store.Address
 	currentBlock []byte
 }
 
-func NewReader(root store.Address, store store.ReadTransaction) (io.Reader, error) {
+func NewReader(root store.Address, store store.Reader) (io.Reader, error) {
 	r := &reader{
 		store: store,
 		root:  root,

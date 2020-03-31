@@ -1,13 +1,13 @@
 package store
 
-type ReadTransaction interface {
+type Reader interface {
 	GetBlock(a Address) (BlockReader, error)
 }
 
-type rtx struct {
+type ReadTransaction struct {
 	s *Store
 }
 
-func (r *rtx) GetBlock(a Address) (BlockReader, error) {
+func (r *ReadTransaction) GetBlock(a Address) (BlockReader, error) {
 	return r.s.getBlockReader(a)
 }
