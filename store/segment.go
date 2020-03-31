@@ -21,16 +21,20 @@ type segment struct {
 	currentSize uint64
 }
 
-func (s *segment) StartAddress() Address {
+func (s *segment) startAddress() Address {
 	return Address(binary.BigEndian.Uint64(s.MMap))
 }
 
 func (s *segment) endAddress() Address {
-	return s.StartAddress() + Address(binary.BigEndian.Uint64(s.MMap[8:])) - 16
+	return s.startAddress() + Address(s.dataContained())
+}
+
+func (s *segment) dataContained() uint64 {
+	return binary.BigEndian.Uint64(s.MMap[8:]) - 16
 }
 
 func (s *segment) hasBlock(a Address) bool {
-	if s.StartAddress() > a {
+	if s.startAddress() > a {
 		return false
 	}
 
@@ -48,7 +52,7 @@ func (s *segment) getBlock(a Address) (BlockReader, error) {
 		return nil, ErrBlockNotFound
 	}
 
-	idx := uint64(a - s.StartAddress() + 16)
+	idx := uint64(a - s.startAddress() + 16)
 
 	return NewBlockReader(s.MMap[idx:])
 }
@@ -167,7 +171,7 @@ func (s *segment) appendBlock(blockSize uint64) (Address, []byte, error) {
 		return NilAddress, nil, err
 	}
 
-	addr := s.nextBlockOffset() + uint64(s.StartAddress()) - 16
+	addr := s.nextBlockOffset() + uint64(s.startAddress()) - 16
 
 	blockData := s.MMap[s.nextBlockOffset() : s.nextBlockOffset()+blockSize]
 

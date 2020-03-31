@@ -97,7 +97,7 @@ func Open(dir string) (*Store, error) {
 
 }
 
-func segmentName(startAddress uint64) string {
+func segmentName(startAddress Address) string {
 	return fmt.Sprintf("segment-%016d", startAddress)
 }
 
@@ -239,13 +239,74 @@ func (s *Store) txCommited(newRoot Address) (Address, error) {
 
 	rolledRoot, err := s.copyBlocks(newRoot, newLda)
 
-	// totalSize := uint64(highestAddress - lda)
-	// used = br.GetUsedDataSize()
+	s.lastCommitAddress.setAddress(rolledRoot)
 
-	// TODO roll data
-	// TODO create a new segment if necessary
-	// TODO drop segments that are not needed
+	err = s.createNewSegmentIfNeeded()
+	if err != nil {
+		return NilAddress, err
+	}
+
+	err = s.removeUnusedSegments()
+	if err != nil {
+		return NilAddress, err
+	}
+
 	return rolledRoot, nil
+}
+
+func (s *Store) totalSize() (uint64, error) {
+	rootAddress := s.lastCommitAddress.address()
+	rr, err := s.GetBlock(rootAddress)
+	if err != nil {
+		return 0, errors.Wrap(err, "while reading root block")
+	}
+
+	return uint64(rootAddress-rr.GetLowestDescendentAddress()) + uint64(len(rr)), nil
+}
+
+func (s *Store) removeUnusedSegments() error {
+	rootAddress := s.lastCommitAddress.address()
+	rr, err := s.GetBlock(rootAddress)
+	if err != nil {
+		return errors.Wrap(err, "while reading root block")
+	}
+	lowest := rr.GetLowestDescendentAddress()
+	for s.segments[0].endAddress() < lowest {
+		err = s.segments[0].closeAndRemove()
+		if err != nil {
+			return err
+		}
+		s.segments = s.segments[1:]
+	}
+	return nil
+}
+
+func (s *Store) createNewSegmentIfNeeded() error {
+
+	totalSize, err := s.totalSize()
+	if err != nil {
+		return err
+	}
+
+	lastSeg := s.segments[len(s.segments)-1]
+
+	if lastSeg.dataContained() < (totalSize >> 4) {
+		return nil
+	}
+
+	addr := lastSeg.endAddress()
+
+	name := filepath.Join(s.dir, segmentName(addr))
+
+	newSeg, err := createSegment(name, MaxSegmentSize, addr)
+	if err != nil {
+		return errors.Wrapf(err, "while creating segment %s", name)
+	}
+
+	s.segments = append(s.segments, newSeg)
+
+	return nil
+
 }
 
 func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, error) {
