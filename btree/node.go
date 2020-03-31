@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ErrNotFound is returned when key cannot be found in the btree
 var ErrNotFound = serrors.New("Not Found")
 
 type keyValue struct {

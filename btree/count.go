@@ -2,6 +2,7 @@ package btree
 
 import "github.com/draganm/chaintrackdb/store"
 
+// Count return the number of keys in the btree
 func Count(r store.Reader, root store.Address) (uint64, error) {
 	n := &node{
 		address: root,

@@ -2,8 +2,11 @@ package btree
 
 import "github.com/draganm/chaintrackdb/store"
 
+// M limits the maximal number of keys in a btree node.
+// Max number of nodes is M*2+1.
 const M = 15
 
+// Put creates a new BTree containing the given key/value
 func Put(rw store.ReaderWriter, root store.Address, key []byte, value store.Address) (store.Address, error) {
 	n := &node{
 		m:       15,
@@ -21,6 +24,7 @@ func Put(rw store.ReaderWriter, root store.Address, key []byte, value store.Addr
 
 }
 
+// CreateEmpty creates an empty btree
 func CreateEmpty(rw store.ReaderWriter) (store.Address, error) {
 
 	n := &node{
