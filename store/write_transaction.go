@@ -97,7 +97,15 @@ func (w *WriteTransaction) Commit(a Address) (Address, error) {
 		return NilAddress, errors.New("commit address is outside the transaction")
 	}
 
-	return w.copyBlocks(a, w.txSegment.StartAddress())
+	defer w.txSegment.closeAndRemove()
+
+	newRoot, err := w.copyBlocks(a, w.txSegment.StartAddress())
+	if err != nil {
+		return NilAddress, err
+	}
+
+	return w.s.txCommited(newRoot)
+
 }
 
 func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {

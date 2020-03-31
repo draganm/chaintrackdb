@@ -150,6 +150,15 @@ func (s *Store) txRolledBack() {
 	s.mu.Unlock()
 }
 
+func (s *Store) txCommited(newRoot Address) (Address, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastCommitAddress.setAddress(newRoot)
+	// TODO create a new segment if necessary
+	// TODO roll data
+	return newRoot, nil
+}
+
 func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, error) {
 	go func() {
 		dc := ctx.Done()
