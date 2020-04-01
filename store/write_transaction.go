@@ -91,17 +91,17 @@ func (w *WriteTransaction) Rollback() error {
 	return nil
 }
 
-func (w *WriteTransaction) Commit(a Address) (Address, error) {
-
-	if a < w.txSegment.startAddress() {
-		return NilAddress, errors.New("commit address is outside the transaction")
-	}
+func (w *WriteTransaction) Commit(a Address) (newRoot Address, err error) {
 
 	defer w.txSegment.closeAndRemove()
 
-	newRoot, err := w.copyBlocks(a, w.txSegment.startAddress())
-	if err != nil {
-		return NilAddress, err
+	newRoot = a
+	if a >= w.txSegment.startAddress() {
+		newRoot, err = w.copyBlocks(a, w.txSegment.startAddress())
+		if err != nil {
+			return NilAddress, err
+		}
+
 	}
 
 	return w.s.txCommited(newRoot)

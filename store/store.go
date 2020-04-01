@@ -219,6 +219,11 @@ func (s *Store) txCommited(newRoot Address) (Address, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	oldRoot := s.lastCommitAddress.address()
+
+	if oldRoot == newRoot {
+		return oldRoot, nil
+	}
+
 	oldRootReader, err := s.GetBlock(oldRoot)
 	if err != nil {
 		return NilAddress, errors.Wrap(err, "while getting reader for the old root")
@@ -309,7 +314,7 @@ func (s *Store) createNewSegmentIfNeeded() error {
 
 }
 
-func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, error) {
+func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, Address, error) {
 	go func() {
 		dc := ctx.Done()
 		if dc != nil {
@@ -325,7 +330,7 @@ func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, err
 	defer s.mu.Unlock()
 	for {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, NilAddress, ctx.Err()
 		}
 		if !s.writeTransactionInProgress {
 			break
@@ -338,13 +343,13 @@ func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, err
 	txSegment, err := createSegment(filepath.Join(s.dir, "tx"), MaxSegmentSize, s.nextAddress())
 
 	if err != nil {
-		return nil, errors.Wrap(err, "while creating tx segment")
+		return nil, NilAddress, errors.Wrap(err, "while creating tx segment")
 	}
 
 	return &WriteTransaction{
 		s:         s,
 		txSegment: txSegment,
 		ctx:       ctx,
-	}, nil
+	}, s.lastCommitAddress.address(), nil
 
 }

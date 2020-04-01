@@ -1,6 +1,7 @@
 package chaintrackdb_test
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -18,7 +19,20 @@ func NewTempDir(t *testing.T) (string, func()) {
 	}
 }
 
-func TestOpenEmptyDatabase(t *testing.T) {
+func NewEmptyDB(t *testing.T) (*chaintrackdb.DB, func()) {
+	td, tempDirCleanup := NewTempDir(t)
+
+	db, err := chaintrackdb.Open(td)
+	require.NoError(t, err)
+
+	return db, func() {
+		err = db.Close()
+		require.NoError(t, err)
+		tempDirCleanup()
+	}
+}
+
+func TestOpenAndCloseEmptyDatabase(t *testing.T) {
 	td, cleanup := NewTempDir(t)
 	defer cleanup()
 
@@ -28,4 +42,18 @@ func TestOpenEmptyDatabase(t *testing.T) {
 
 	err = db.Close()
 	require.NoError(t, err)
+}
+
+func TestCreatingEmptyMap(t *testing.T) {
+	db, cleanup := NewEmptyDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+		return nil
+	})
+
+	require.NoError(t, err)
+
 }

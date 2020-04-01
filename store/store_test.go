@@ -29,7 +29,7 @@ func TestCreatingNewStore(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("when I append a new block to the store", func(t *testing.T) {
-			tx, err := st.NewWriteTransaction(context.Background())
+			tx, _, err := st.NewWriteTransaction(context.Background())
 			require.NoError(t, err)
 
 			defer tx.Rollback()
@@ -92,7 +92,7 @@ func TestOpeningExistingStore(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Run("when I append a new block to the store", func(t *testing.T) {
-				tx, err := st.NewWriteTransaction(context.Background())
+				tx, _, err := st.NewWriteTransaction(context.Background())
 				require.NoError(t, err)
 
 				bw, err := tx.AppendBlock(store.TypeBTreeNode, 0, 20)
