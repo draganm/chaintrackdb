@@ -27,7 +27,7 @@ func newWriteTransaction(t *testing.T) (*store.WriteTransaction, func() error) {
 	st, err := store.Open(td)
 	require.NoError(t, err)
 
-	wtx, err := st.NewWriteTransaction(context.Background())
+	wtx, _, err := st.NewWriteTransaction(context.Background())
 	require.NoError(t, err)
 
 	return wtx, func() error {
