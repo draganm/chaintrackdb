@@ -125,6 +125,18 @@ func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
 		return NilAddress, errors.Wrapf(err, "while getting block %d", current)
 	}
 
+	numberOfChildren := br.NumberOfChildren()
+	children := make([]Address, numberOfChildren)
+
+	for i := 0; i < br.NumberOfChildren(); i++ {
+		newAddress, err := w.copyBlocks(br.GetChildAddress(i), start)
+		if err != nil {
+			return NilAddress, err
+		}
+
+		children[i] = newAddress
+	}
+
 	addr, nbd, err := lastSegment.appendBlock(uint64(len(br)))
 	if err != nil {
 		return NilAddress, errors.Wrap(err, "while appending block")
@@ -139,7 +151,6 @@ func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
 	binary.BigEndian.PutUint64(nbd[2+8:], uint64(addr))
 
 	// zero all children
-	numberOfChildren := int(nbd[2+8+8+1])
 	for i := 0; i < numberOfChildren; i++ {
 		binary.BigEndian.PutUint64(nbd[2+8+8+1+1+8*i:], 0)
 	}
@@ -151,19 +162,17 @@ func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
 		return NilAddress, errors.Wrap(err, "while creating reader for the copied block")
 	}
 
+	// TODO: write children first, then create a new block
+
 	bw := BlockWriter{
-		st:          w,
+		st:          w.s,
 		Address:     addr,
 		BlockReader: nbr,
 		Data:        nbr.GetData(),
 	}
 
 	for i := 0; i < numberOfChildren; i++ {
-		newAddress, err := w.copyBlocks(br.GetChildAddress(i), start)
-		if err != nil {
-			return NilAddress, err
-		}
-		err = bw.SetChild(i, newAddress)
+		err = bw.SetChild(i, children[i])
 		if err != nil {
 			return NilAddress, errors.Wrap(err, "while setting child address of the new block")
 		}

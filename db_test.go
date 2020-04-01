@@ -51,7 +51,7 @@ func TestCreatingEmptyMap(t *testing.T) {
 	ctx := context.Background()
 
 	err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
-		return nil
+		return tx.CreateMap("abc")
 	})
 
 	require.NoError(t, err)
