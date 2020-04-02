@@ -2,10 +2,12 @@ package chaintrackdb
 
 import (
 	"context"
+	"io/ioutil"
 
 	serrors "errors"
 
 	"github.com/draganm/chaintrackdb/btree"
+	"github.com/draganm/chaintrackdb/data"
 	"github.com/draganm/chaintrackdb/dbpath"
 	"github.com/draganm/chaintrackdb/store"
 	"github.com/pkg/errors"
@@ -56,6 +58,41 @@ func (w *WriteTransaction) CreateMap(path string) error {
 
 		return btree.Put(w.swt, w.root, []byte(key), addr)
 	})
+}
+
+const dataSegSize = 60 * 1024
+const dataFanout = 128
+
+func (w *WriteTransaction) Put(path string, d []byte) error {
+
+	dataAddress, err := data.StoreData(w.swt, d, dataSegSize, dataFanout)
+	if err != nil {
+		return errors.Wrap(err, "while storing data")
+	}
+
+	return w.modifyPath(path, func(ad store.Address, key string) (store.Address, error) {
+		if err != nil {
+			return store.NilAddress, errors.Wrap(err, "while putting data")
+		}
+
+		return btree.Put(w.swt, w.root, []byte(key), dataAddress)
+	})
+}
+
+func (w *WriteTransaction) Get(path string) ([]byte, error) {
+
+	addr, err := w.pathElementAddress(path)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := data.NewReader(addr, w.swt)
+	if err != nil {
+		return nil, errors.Wrap(err, "while creating data reader")
+	}
+
+	return ioutil.ReadAll(r)
+
 }
 
 func (w *WriteTransaction) Exists(path string) (bool, error) {
@@ -129,6 +166,9 @@ func modifyPath(st store.ReaderWriter, ad store.Address, path []string, f func(a
 
 	if len(path) > 1 {
 		ca, err := btree.Get(st, ad, []byte(path[0]))
+		if err == btree.ErrNotFound {
+			return store.NilAddress, ErrNotFound
+		}
 		if err != nil {
 			return store.NilAddress, err
 		}
