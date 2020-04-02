@@ -3,6 +3,8 @@ package chaintrackdb
 import (
 	"context"
 
+	serrors "errors"
+
 	"github.com/draganm/chaintrackdb/btree"
 	"github.com/draganm/chaintrackdb/dbpath"
 	"github.com/draganm/chaintrackdb/store"
@@ -54,6 +56,45 @@ func (w *WriteTransaction) CreateMap(path string) error {
 
 		return btree.Put(w.swt, w.root, []byte(key), addr)
 	})
+}
+
+func (w *WriteTransaction) Exists(path string) (bool, error) {
+	_, err := w.pathElementAddress(path)
+
+	if err == ErrNotFound {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+
+}
+
+var ErrNotFound = serrors.New("not found")
+
+func (w *WriteTransaction) pathElementAddress(path string) (store.Address, error) {
+	parts, err := dbpath.Split(path)
+	if err != nil {
+		return store.NilAddress, err
+	}
+
+	ad := w.root
+
+	for _, p := range parts[:len(parts)] {
+		ad, err = btree.Get(w.swt, ad, []byte(p))
+		if err == btree.ErrNotFound {
+			return store.NilAddress, ErrNotFound
+		}
+
+		if err != nil {
+			return store.NilAddress, err
+		}
+	}
+
+	return ad, nil
 }
 
 func (w *WriteTransaction) modifyPath(path string, f func(ad store.Address, key string) (store.Address, error)) error {

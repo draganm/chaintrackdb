@@ -50,22 +50,53 @@ func TestCreatingEmptyMap(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
-		return tx.CreateMap("abc")
-	})
-	require.NoError(t, err)
+	t.Run("when I create an empty map", func(t *testing.T) {
+		err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+			return tx.CreateMap("abc")
+		})
+		require.NoError(t, err)
+		t.Run("then the map should exist", func(t *testing.T) {
+			var exists bool
+			db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+				exists, err = tx.Exists("abc")
+				return err
+			})
+			require.True(t, exists)
 
-	err = db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
-		return tx.CreateMap("def")
+		})
 	})
-	require.NoError(t, err)
 
-	t.Run("creating a sub-map", func(t *testing.T) {
-		err = db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
-			return tx.CreateMap("abc/def")
+}
+
+func TestCreatingEmptySubMap(t *testing.T) {
+	db, cleanup := NewEmptyDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	t.Run("when I create an empty map", func(t *testing.T) {
+		err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+			return tx.CreateMap("abc")
 		})
 		require.NoError(t, err)
 
+		t.Run("and I create a sub-map", func(t *testing.T) {
+			err = db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+				return tx.CreateMap("abc/def")
+			})
+			require.NoError(t, err)
+
+			t.Run("then the sub-map should exist", func(t *testing.T) {
+				var exists bool
+				db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+					exists, err = tx.Exists("abc/def")
+					return err
+				})
+				require.True(t, exists)
+
+			})
+
+		})
 	})
 
 }
