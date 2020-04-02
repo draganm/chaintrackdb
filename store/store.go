@@ -152,7 +152,11 @@ func (s *Store) txRolledBack() {
 
 func (s *Store) txCommited(newRoot Address) (Address, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer func() {
+		s.writeTransactionInProgress = false
+		s.writeTransactionCond.Broadcast()
+		s.mu.Unlock()
+	}()
 	oldRoot := s.lastCommitAddress.address()
 
 	if oldRoot == newRoot {
@@ -195,9 +199,6 @@ func (s *Store) txCommited(newRoot Address) (Address, error) {
 	if err != nil {
 		return NilAddress, err
 	}
-
-	s.writeTransactionInProgress = false
-	s.writeTransactionCond.Broadcast()
 
 	return rolledRoot, nil
 }

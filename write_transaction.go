@@ -73,6 +73,17 @@ func (w *WriteTransaction) Exists(path string) (bool, error) {
 
 }
 
+func (w *WriteTransaction) Count(path string) (uint64, error) {
+	addr, err := w.pathElementAddress(path)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return btree.Count(w.swt, addr)
+
+}
+
 var ErrNotFound = serrors.New("not found")
 
 func (w *WriteTransaction) pathElementAddress(path string) (store.Address, error) {

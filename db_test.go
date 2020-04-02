@@ -57,12 +57,23 @@ func TestCreatingEmptyMap(t *testing.T) {
 		require.NoError(t, err)
 		t.Run("then the map should exist", func(t *testing.T) {
 			var exists bool
-			db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+			err = db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
 				exists, err = tx.Exists("abc")
 				return err
 			})
+			require.NoError(t, err)
 			require.True(t, exists)
 
+		})
+
+		t.Run("then the count of the parent map should be 1", func(t *testing.T) {
+			var count uint64
+			err = db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+				count, err = tx.Count("/")
+				return err
+			})
+			require.NoError(t, err)
+			require.Equal(t, uint64(1), count)
 		})
 	})
 
