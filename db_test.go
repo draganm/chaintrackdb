@@ -53,7 +53,19 @@ func TestCreatingEmptyMap(t *testing.T) {
 	err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
 		return tx.CreateMap("abc")
 	})
-
 	require.NoError(t, err)
+
+	err = db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+		return tx.CreateMap("def")
+	})
+	require.NoError(t, err)
+
+	t.Run("creating a sub-map", func(t *testing.T) {
+		err = db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+			return tx.CreateMap("abc/def")
+		})
+		require.NoError(t, err)
+
+	})
 
 }

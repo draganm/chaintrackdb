@@ -97,7 +97,11 @@ func (w *WriteTransaction) Commit(a Address) (newRoot Address, err error) {
 
 	newRoot = a
 	if a >= w.txSegment.startAddress() {
-		newRoot, err = w.copyBlocks(a, w.txSegment.startAddress())
+		shouldCopy := func(a Address) bool {
+			return a >= txStartAddress
+		}
+
+		newRoot, err = copyBlocks(w, w.s.lastSegment(), a, shouldCopy)
 		if err != nil {
 			return NilAddress, err
 		}
@@ -108,19 +112,17 @@ func (w *WriteTransaction) Commit(a Address) (newRoot Address, err error) {
 
 }
 
-func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
+func copyBlocks(r Reader, w *segment, current Address, shouldCopy func(Address) bool) (Address, error) {
 
 	if current == NilAddress {
 		return NilAddress, nil
 	}
 
-	if current < start {
+	if !shouldCopy(current) {
 		return current, nil
 	}
 
-	lastSegment := w.s.segments[len(w.s.segments)-1]
-
-	br, err := w.GetBlock(current)
+	br, err := r.GetBlock(current)
 	if err != nil {
 		return NilAddress, errors.Wrapf(err, "while getting block %d", current)
 	}
@@ -129,7 +131,7 @@ func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
 	children := make([]Address, numberOfChildren)
 
 	for i := 0; i < br.NumberOfChildren(); i++ {
-		newAddress, err := w.copyBlocks(br.GetChildAddress(i), start)
+		newAddress, err := copyBlocks(r, w, br.GetChildAddress(i), shouldCopy)
 		if err != nil {
 			return NilAddress, err
 		}
@@ -137,7 +139,7 @@ func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
 		children[i] = newAddress
 	}
 
-	addr, nbd, err := lastSegment.appendBlock(uint64(len(br)))
+	addr, nbd, err := w.appendBlock(uint64(len(br)))
 	if err != nil {
 		return NilAddress, errors.Wrap(err, "while appending block")
 	}
@@ -165,7 +167,7 @@ func (w *WriteTransaction) copyBlocks(current, start Address) (Address, error) {
 	// TODO: write children first, then create a new block
 
 	bw := BlockWriter{
-		st:          w.s,
+		st:          r,
 		Address:     addr,
 		BlockReader: nbr,
 		Data:        nbr.GetData(),

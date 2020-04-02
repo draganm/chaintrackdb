@@ -49,7 +49,11 @@ func (w BlockWriter) SetChild(i int, addr Address) error {
 	lowest := w.Address
 
 	for i := 0; i < w.NumberOfChildren(); i++ {
-		newChildReader, err = w.st.GetBlock(w.GetChildAddress(i))
+		childAddress := w.GetChildAddress(i)
+		if childAddress == NilAddress {
+			continue
+		}
+		newChildReader, err = w.st.GetBlock(childAddress)
 		if err != nil {
 			return errors.Wrap(err, "while getting child block reader")
 		}

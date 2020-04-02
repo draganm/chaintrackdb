@@ -38,7 +38,7 @@ func (s *segment) hasBlock(a Address) bool {
 		return false
 	}
 
-	if s.endAddress() < a {
+	if s.endAddress() <= a {
 		return false
 	}
 

@@ -150,71 +150,6 @@ func (s *Store) txRolledBack() {
 	s.mu.Unlock()
 }
 
-func (s *Store) copyBlocks(current, lowestAddress Address) (Address, error) {
-
-	if current == NilAddress {
-		return NilAddress, nil
-	}
-
-	if current >= lowestAddress {
-		return current, nil
-	}
-
-	lastSegment := s.segments[len(s.segments)-1]
-
-	br, err := s.GetBlock(current)
-	if err != nil {
-		return NilAddress, errors.Wrapf(err, "while getting block %d", current)
-	}
-
-	addr, nbd, err := lastSegment.appendBlock(uint64(len(br)))
-	if err != nil {
-		return NilAddress, errors.Wrap(err, "while appending block")
-	}
-
-	copy(nbd, br)
-
-	// set total data to block size
-	binary.BigEndian.PutUint64(nbd[2:], uint64(len(nbd)))
-
-	// set lowest address to block address
-	binary.BigEndian.PutUint64(nbd[2+8:], uint64(addr))
-
-	// zero all children
-	numberOfChildren := int(nbd[2+8+8+1])
-	for i := 0; i < numberOfChildren; i++ {
-		binary.BigEndian.PutUint64(nbd[2+8+8+1+1+8*i:], 0)
-	}
-
-	// uint64(2 + 8 + 8 + 1 + 1 + numberOfChildren*8 + dataSize)
-
-	nbr, err := NewBlockReader(nbd)
-	if err != nil {
-		return NilAddress, errors.Wrap(err, "while creating reader for the copied block")
-	}
-
-	bw := BlockWriter{
-		st:          s,
-		Address:     addr,
-		BlockReader: nbr,
-		Data:        nbr.GetData(),
-	}
-
-	for i := 0; i < numberOfChildren; i++ {
-		newAddress, err := s.copyBlocks(br.GetChildAddress(i), lowestAddress)
-		if err != nil {
-			return NilAddress, err
-		}
-		err = bw.SetChild(i, newAddress)
-		if err != nil {
-			return NilAddress, errors.Wrap(err, "while setting child address of the new block")
-		}
-	}
-
-	return addr, nil
-
-}
-
 func (s *Store) txCommited(newRoot Address) (Address, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -230,6 +165,7 @@ func (s *Store) txCommited(newRoot Address) (Address, error) {
 	}
 
 	s.lastCommitAddress.setAddress(newRoot)
+
 	br, err := s.GetBlock(newRoot)
 	if err != nil {
 		return NilAddress, errors.Wrap(err, "while getting reader for the new root")
@@ -242,7 +178,11 @@ func (s *Store) txCommited(newRoot Address) (Address, error) {
 
 	newLda := lda + Address(dataWritten)
 
-	rolledRoot, err := s.copyBlocks(newRoot, newLda)
+	shouldCopy := func(a Address) bool {
+		return a < newLda
+	}
+
+	rolledRoot, err := copyBlocks(s, s.lastSegment(), newRoot, shouldCopy)
 
 	s.lastCommitAddress.setAddress(rolledRoot)
 
@@ -255,6 +195,9 @@ func (s *Store) txCommited(newRoot Address) (Address, error) {
 	if err != nil {
 		return NilAddress, err
 	}
+
+	s.writeTransactionInProgress = false
+	s.writeTransactionCond.Broadcast()
 
 	return rolledRoot, nil
 }
@@ -293,7 +236,7 @@ func (s *Store) createNewSegmentIfNeeded() error {
 		return err
 	}
 
-	lastSeg := s.segments[len(s.segments)-1]
+	lastSeg := s.lastSegment()
 
 	if lastSeg.dataContained() < (totalSize >> 4) {
 		return nil
@@ -313,6 +256,8 @@ func (s *Store) createNewSegmentIfNeeded() error {
 	return nil
 
 }
+
+const txStartAddress = 0xff00000000000000
 
 func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, Address, error) {
 	go func() {
@@ -340,7 +285,7 @@ func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, Add
 
 	s.writeTransactionInProgress = true
 
-	txSegment, err := createSegment(filepath.Join(s.dir, "tx"), MaxSegmentSize, s.nextAddress())
+	txSegment, err := createSegment(filepath.Join(s.dir, "tx"), MaxSegmentSize, txStartAddress)
 
 	if err != nil {
 		return nil, NilAddress, errors.Wrap(err, "while creating tx segment")
@@ -352,4 +297,8 @@ func (s *Store) NewWriteTransaction(ctx context.Context) (*WriteTransaction, Add
 		ctx:       ctx,
 	}, s.lastCommitAddress.address(), nil
 
+}
+
+func (s *Store) lastSegment() *segment {
+	return s.segments[len(s.segments)-1]
 }
