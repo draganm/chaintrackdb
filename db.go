@@ -23,3 +23,7 @@ func Open(path string) (*DB, error) {
 func (d *DB) Close() error {
 	return d.s.Close()
 }
+
+func (d *DB) PrintStats() {
+	d.s.PrintStats()
+}

@@ -18,6 +18,18 @@ type WriteTransaction struct {
 	swt  *store.WriteTransaction
 }
 
+func (d *DB) NewWriteTransaction(ctx context.Context) (*WriteTransaction, error) {
+	swt, root, err := d.s.NewWriteTransaction(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "while creating store transaction")
+	}
+
+	return &WriteTransaction{
+		root: root,
+		swt:  swt,
+	}, nil
+}
+
 func (d *DB) WriteTransaction(ctx context.Context, f func(tx *WriteTransaction) error) error {
 
 	swt, root, err := d.s.NewWriteTransaction(ctx)
@@ -56,8 +68,13 @@ func (w *WriteTransaction) CreateMap(path string) error {
 			return store.NilAddress, errors.Wrap(err, "while creating empty map")
 		}
 
-		return btree.Put(w.swt, w.root, []byte(key), addr)
+		return btree.Put(w.swt, ad, []byte(key), addr)
 	})
+}
+
+func (w *WriteTransaction) Commit() error {
+	_, err := w.swt.Commit(w.root)
+	return err
 }
 
 const dataSegSize = 60 * 1024
@@ -75,7 +92,7 @@ func (w *WriteTransaction) Put(path string, d []byte) error {
 			return store.NilAddress, errors.Wrap(err, "while putting data")
 		}
 
-		return btree.Put(w.swt, w.root, []byte(key), dataAddress)
+		return btree.Put(w.swt, ad, []byte(key), dataAddress)
 	})
 }
 

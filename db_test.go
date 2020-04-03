@@ -112,7 +112,40 @@ func TestCreatingEmptySubMap(t *testing.T) {
 
 }
 
-func TestPuttingDataToRoot(t *testing.T) {
+func TestPuttingDataIntoRoot(t *testing.T) {
+	db, cleanup := NewEmptyDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	t.Run("when I create an empty map", func(t *testing.T) {
+		err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+			return tx.CreateMap("abc")
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("when I put data to submap", func(t *testing.T) {
+		err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+			return tx.Put("abc/def", []byte{1, 2, 3})
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("and when I get the data in a separate transaction", func(t *testing.T) {
+		var d []byte
+		err := db.WriteTransaction(ctx, func(tx *chaintrackdb.WriteTransaction) error {
+			var err error
+			d, err = tx.Get("abc/def")
+			return err
+		})
+		require.NoError(t, err)
+		require.Equal(t, []byte{1, 2, 3}, d)
+
+	})
+
+}
+
+func TestPuttingDataIntoSecondLevel(t *testing.T) {
 	db, cleanup := NewEmptyDB(t)
 	defer cleanup()
 

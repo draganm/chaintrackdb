@@ -23,7 +23,7 @@ type Store struct {
 	writeTransactionCond       *sync.Cond
 }
 
-var storeRegexp = regexp.MustCompile("^segment-[0-9]*.dat$")
+var storeRegexp = regexp.MustCompile("^segment-[0-9]*$")
 
 const MaxSegmentSize = 1024 * 1024 * 1024 * 1024
 
@@ -150,6 +150,31 @@ func (s *Store) txRolledBack() {
 	s.mu.Unlock()
 }
 
+func (s *Store) PrintStats() {
+	root := s.lastCommitAddress.address()
+
+	br, err := s.GetBlock(root)
+	if err != nil {
+		panic(errors.Wrap(err, "while getting reader for the old root"))
+	}
+
+	lda := br.GetLowestDescendentAddress()
+	highest := root + Address(len(br))
+
+	dataUsed := br.GetUsedDataSize()
+
+	total := uint64(highest - lda)
+	garbage := float64(total - dataUsed)
+
+	fmt.Println("-- DBSTATS")
+	fmt.Println("- lowest", lda)
+	fmt.Println("- highest", highest)
+	fmt.Println("- bytes occupied", total)
+	fmt.Println("- data used", dataUsed)
+	fmt.Printf("- garbage %% %.2f\n", (garbage/float64(total))*100.0)
+
+}
+
 func (s *Store) txCommited(newRoot Address) (Address, error) {
 	s.mu.Lock()
 	defer func() {
@@ -180,10 +205,10 @@ func (s *Store) txCommited(newRoot Address) (Address, error) {
 
 	dataWritten := uint64(highestAddress - (oldRoot + Address(len(oldRootReader))))
 
-	newLda := lda + Address(dataWritten)
+	newLda := lda + Address(dataWritten*6)
 
-	shouldCopy := func(a Address) bool {
-		return a < newLda
+	shouldCopy := func(a, lowestDescent Address) bool {
+		return lowestDescent < newLda
 	}
 
 	rolledRoot, err := copyBlocks(s, s.lastSegment(), newRoot, shouldCopy)
@@ -239,7 +264,7 @@ func (s *Store) createNewSegmentIfNeeded() error {
 
 	lastSeg := s.lastSegment()
 
-	if lastSeg.dataContained() < (totalSize >> 4) {
+	if lastSeg.dataContained() < (totalSize >> 2) {
 		return nil
 	}
 

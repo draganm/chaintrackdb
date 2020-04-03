@@ -79,4 +79,5 @@ func (c *commitAddress) address() Address {
 
 func (c *commitAddress) setAddress(a Address) {
 	binary.BigEndian.PutUint64(c.MMap, uint64(a))
+	c.MMap.Flush()
 }

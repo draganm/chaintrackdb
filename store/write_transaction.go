@@ -97,7 +97,7 @@ func (w *WriteTransaction) Commit(a Address) (newRoot Address, err error) {
 
 	newRoot = a
 	if a >= w.txSegment.startAddress() {
-		shouldCopy := func(a Address) bool {
+		shouldCopy := func(a, _ Address) bool {
 			return a >= txStartAddress
 		}
 
@@ -112,19 +112,19 @@ func (w *WriteTransaction) Commit(a Address) (newRoot Address, err error) {
 
 }
 
-func copyBlocks(r Reader, w *segment, current Address, shouldCopy func(Address) bool) (Address, error) {
+func copyBlocks(r Reader, w *segment, current Address, shouldCopy func(Address, Address) bool) (Address, error) {
 
 	if current == NilAddress {
 		return NilAddress, nil
 	}
 
-	if !shouldCopy(current) {
-		return current, nil
-	}
-
 	br, err := r.GetBlock(current)
 	if err != nil {
 		return NilAddress, errors.Wrapf(err, "while getting block %d", current)
+	}
+
+	if !shouldCopy(current, br.GetLowestDescendentAddress()) {
+		return current, nil
 	}
 
 	numberOfChildren := br.NumberOfChildren()
